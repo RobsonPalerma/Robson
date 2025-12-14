@@ -1,0 +1,139 @@
+CREATE DATABASE mercado_facil
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_general_ci;
+
+USE mercado_facil;
+CREATE TABLE produto (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(50) NOT NULL UNIQUE,
+    quantidade INT NOT NULL DEFAULT 0,
+    estoque_minimo INT NOT NULL,
+    estoque_maximo INT NOT NULL,
+    status ENUM('OK', 'BAIXO', 'FORA') NOT NULL DEFAULT 'OK',
+    data_cadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
+    data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE movimentacao_estoque (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    produto_id INT NOT NULL,
+    tipo ENUM('entrada', 'saida') NOT NULL,
+    quantidade INT NOT NULL CHECK (quantidade > 0),
+    motivo ENUM('compra', 'devolucao', 'venda', 'ajuste', 'perda', 'outro') NOT NULL,
+    referencia VARCHAR(100),
+    data_movimentacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_mov_produto
+        FOREIGN KEY (produto_id)
+        REFERENCES produto(id)
+        ON DELETE CASCADE
+);
+CREATE TABLE alerta_estoque (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    produto_id INT NOT NULL,
+    tipo_alerta ENUM('ESTOQUE_BAIXO', 'FORA_DE_ESTOQUE') NOT NULL,
+    descricao TEXT,
+    resolvido BOOLEAN DEFAULT FALSE,
+    data_alerta DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_alerta_produto
+        FOREIGN KEY (produto_id)
+        REFERENCES produto(id)
+        ON DELETE CASCADE
+);
+CREATE VIEW vw_relatorio_estoque AS
+SELECT
+    codigo,
+    quantidade,
+    estoque_minimo,
+    estoque_maximo,
+    status,
+    data_atualizacao
+FROM produto
+ORDER BY codigo;
+
+DELIMITER $$
+
+CREATE TRIGGER tg_status_produto
+BEFORE INSERT ON produto
+FOR EACH ROW
+BEGIN
+    IF NEW.quantidade <= 0 THEN
+        SET NEW.status = 'FORA';
+    ELSEIF NEW.quantidade < NEW.estoque_minimo THEN
+        SET NEW.status = 'BAIXO';
+    ELSE
+        SET NEW.status = 'OK';
+    END IF;
+END$$
+
+DELIMITER ;
+DELIMITER $$
+
+CREATE TRIGGER tg_status_produto_update
+BEFORE UPDATE ON produto
+FOR EACH ROW
+BEGIN
+    IF NEW.quantidade <= 0 THEN
+        SET NEW.status = 'FORA';
+    ELSEIF NEW.quantidade < NEW.estoque_minimo THEN
+        SET NEW.status = 'BAIXO';
+    ELSE
+        SET NEW.status = 'OK';
+    END IF;
+END$$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE TRIGGER tg_status_produto_update
+BEFORE UPDATE ON produto
+FOR EACH ROW
+BEGIN
+    IF NEW.quantidade <= 0 THEN
+        SET NEW.status = 'FORA';
+    ELSEIF NEW.quantidade < NEW.estoque_minimo THEN
+        SET NEW.status = 'BAIXO';
+    ELSE
+        SET NEW.status = 'OK';
+    END IF;
+END$$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE TRIGGER tg_movimentacao_estoque
+AFTER INSERT ON movimentacao_estoque
+FOR EACH ROW
+BEGIN
+    IF NEW.tipo = 'entrada' THEN
+        UPDATE produto
+        SET quantidade = quantidade + NEW.quantidade
+        WHERE id = NEW.produto_id;
+    ELSE
+        UPDATE produto
+        SET quantidade = quantidade - NEW.quantidade
+        WHERE id = NEW.produto_id;
+    END IF;
+END$$
+
+DELIMITER ;
+
+INSERT INTO produto (codigo, quantidade, estoque_minimo, estoque_maximo)
+VALUES
+('PROD001', 50, 10, 100),
+('PROD002', 5, 10, 50),
+('PROD003', 0, 5, 30);
+
+INSERT INTO movimentacao_estoque (produto_id, tipo, quantidade, motivo, referencia)
+VALUES
+(1, 'saida', 10, 'venda', 'NF123'),
+(2, 'entrada', 20, 'compra', 'NF456');
+
+
+
+
+
+
+
